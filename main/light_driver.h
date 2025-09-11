@@ -46,7 +46,10 @@ extern "C" {
 /* light intensity level */
 #define LIGHT_DEFAULT_ON  1
 #define LIGHT_DEFAULT_OFF 0
+
+#if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
 #define LIGHT_DEFAULT_BRIGHTNESS 200
+#endif
 
 /**
 * @brief Set light power (on/off).

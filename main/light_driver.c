@@ -44,7 +44,9 @@
 #define MM_LED_GPIO	4
 #define MM_LED_LEDC_CH 1
 
+#if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
 static uint8_t mm_last_brightness = LIGHT_DEFAULT_BRIGHTNESS;
+#endif
 
 void light_driver_set_power(bool power)
 {
@@ -61,9 +63,13 @@ void light_driver_set_power(bool power)
     }
 #else
     rtc_gpio_hold_dis(MM_LED_GPIO);
+#if CONFIG_HALLOWEEN_LED_LEVEL_HIGH
 	rtc_gpio_set_level(MM_LED_GPIO, power);
-    rtc_gpio_hold_en(MM_LED_GPIO);
+#else
+	rtc_gpio_set_level(MM_LED_GPIO, !power);
 #endif
+    rtc_gpio_hold_en(MM_LED_GPIO);
+#endif //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
 }
 
 void light_driver_set_brightness(uint8_t value)
@@ -71,10 +77,14 @@ void light_driver_set_brightness(uint8_t value)
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
     mm_last_brightness = value;
 
+#if CONFIG_HALLOWEEN_LED_LEVEL_HIGH
     uint32_t duty_cycle = (1023 * value) / 255; // LEDC resolution set to 10bits, thus: 100% = 1023
+#else
+    uint32_t duty_cycle = (1023 * (255-value)) / 255; // LEDC resolution set to 10bits, thus: 100% = 1023
+#endif
     ledc_set_duty(LEDC_LOW_SPEED_MODE, MM_LED_LEDC_CH, duty_cycle);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, MM_LED_LEDC_CH);
-#endif
+#endif //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
 }
 
 void light_driver_init(bool power)

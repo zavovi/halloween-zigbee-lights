@@ -2,5 +2,9 @@ menu "Halloween Configuration"
     config HALLOWEEN_BRIGHTNESS_ENABLE
         bool "Enable Brightness"
         default y
+		
+    config HALLOWEEN_LED_LEVEL_HIGH
+        bool "LED Level High"
+        default y
     
 endmenu
