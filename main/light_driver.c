@@ -95,7 +95,7 @@ void light_driver_init(bool power)
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .duty_resolution = LEDC_TIMER_10_BIT,
         .timer_num = 1,
-        .freq_hz = 5000,
+        .freq_hz = 1000,
         .clk_cfg = LEDC_AUTO_CLK
     };
 
