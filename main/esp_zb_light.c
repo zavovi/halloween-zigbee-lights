@@ -83,7 +83,7 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
         }
         break;
     case ESP_ZB_COMMON_SIGNAL_CAN_SLEEP:
-        ESP_LOGI(TAG, "Zigbee can sleep");
+        //ESP_LOGI(TAG, "Zigbee can sleep");
 		//esp_zb_sleep_set_threshold(1000);
         esp_zb_sleep_now();
         break;
@@ -102,16 +102,31 @@ static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t 
     ESP_RETURN_ON_FALSE(message, ESP_FAIL, TAG, "Empty message");
     ESP_RETURN_ON_FALSE(message->info.status == ESP_ZB_ZCL_STATUS_SUCCESS, ESP_ERR_INVALID_ARG, TAG, "Received message: error status(%d)",
                         message->info.status);
+
     ESP_LOGI(TAG, "Received message: endpoint(%d), cluster(0x%x), attribute(0x%x), data size(%d)", message->info.dst_endpoint, message->info.cluster, message->attribute.id, message->attribute.data.size);
-			 
-    if (message->info.dst_endpoint == HA_ESP_LIGHT_ENDPOINT) {
-        if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_ON_OFF) {
-            if (message->attribute.id == ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID && message->attribute.data.type == ESP_ZB_ZCL_ATTR_TYPE_BOOL) {
+    if (message->info.dst_endpoint == HA_ESP_LIGHT_ENDPOINT) 
+    {
+        if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_ON_OFF) 
+        {
+            if (message->attribute.id == ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID && message->attribute.data.type == ESP_ZB_ZCL_ATTR_TYPE_BOOL) 
+            {
                 light_state = message->attribute.data.value ? *(bool *)message->attribute.data.value : light_state;
                 ESP_LOGI(TAG, "Light sets to %s", light_state ? "On" : "Off");
                 light_driver_set_power(light_state);
             }
         }
+#if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
+        else if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL)
+        {
+            if (message->attribute.id == ESP_ZB_ZCL_ATTR_LEVEL_CONTROL_CURRENT_LEVEL_ID)
+            {
+                uint8_t value = *(uint8_t *)message->attribute.data.value;
+                ESP_LOGI(TAG, "Light level change to:%d", value);
+                light_driver_set_brightness(value);
+            }
+            
+        }
+#endif
     }
     return ret;
 }
@@ -154,11 +169,18 @@ static void esp_zb_task(void *pvParameters)
     /* Enable zigbee light sleep */
     esp_zb_sleep_enable(true);
     esp_zb_init(&zb_nwk_cfg);
-	
+#if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
+	/* set the dimmable light device config */
+    esp_zb_color_dimmable_light_cfg_t light_cfg = ESP_ZB_DEFAULT_COLOR_DIMMABLE_LIGHT_CONFIG();
+	light_cfg.on_off_cfg.on_off = LIGHT_DEFAULT_ON;
+	light_cfg.level_cfg.current_level = LIGHT_DEFAULT_BRIGHTNESS;
+    esp_zb_ep_list_t *esp_zb_on_off_light_ep = esp_zb_color_dimmable_light_ep_create(HA_ESP_LIGHT_ENDPOINT, &light_cfg);
+#else
 	/* set the on-off light device config */
     esp_zb_on_off_light_cfg_t light_cfg = ESP_ZB_DEFAULT_ON_OFF_LIGHT_CONFIG();
 	light_cfg.on_off_cfg.on_off = LIGHT_DEFAULT_ON;
     esp_zb_ep_list_t *esp_zb_on_off_light_ep = esp_zb_on_off_light_ep_create(HA_ESP_LIGHT_ENDPOINT, &light_cfg);
+#endif
     zcl_basic_manufacturer_info_t info = {
         .manufacturer_name = ESP_MANUFACTURER_NAME,
         .model_identifier = ESP_MODEL_IDENTIFIER,

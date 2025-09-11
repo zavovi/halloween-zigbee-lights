@@ -46,6 +46,7 @@ extern "C" {
 /* light intensity level */
 #define LIGHT_DEFAULT_ON  1
 #define LIGHT_DEFAULT_OFF 0
+#define LIGHT_DEFAULT_BRIGHTNESS 200
 
 /**
 * @brief Set light power (on/off).
@@ -53,6 +54,13 @@ extern "C" {
 * @param  power  The light power to be set
 */
 void light_driver_set_power(bool power);
+
+/**
+* @brief Set light brightness (0 - 100%).
+*
+* @param  value  The light brightness value to be set
+*/
+void light_driver_set_brightness(uint8_t value);
 
 /**
 * @brief color light driver init, be invoked where you want to use color light
