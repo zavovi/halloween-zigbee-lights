@@ -1,3 +1,5 @@
+
+CONFIG_IDF_TARGET="esp32c6"
 #
 # Partition Table
 #
@@ -29,3 +31,20 @@ CONFIG_ZB_ENABLED=y
 CONFIG_ZB_ZED=y
 # end of Zboss
 # end of Component config
+
+
+#
+# Sleep Config
+#
+CONFIG_PM_ENABLE=y
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+CONFIG_PM_POWER_DOWN_PERIPHERAL_IN_LIGHT_SLEEP=y
+CONFIG_IEEE802154_SLEEP_ENABLE=y
+# Use 1000Hz freertos tick to lower sleep time threshold
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP_SLEEP_POWER_DOWN_FLASH=y
+# end of light sleep
+# ESP32-C6 config
+CONFIG_ESP_PHY_MAC_BB_PD=y
+
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_80=y

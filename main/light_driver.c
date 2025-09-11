@@ -40,7 +40,7 @@
 #include <driver/rtc_io.h>
 #include "esp_sleep.h"
 
-#define MM_LED_GPIO	3
+#define MM_LED_GPIO	4
 
 void light_driver_set_power(bool power)
 {
