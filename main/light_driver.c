@@ -45,7 +45,12 @@
 #define MM_LED_LEDC_CH 1
 
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
-static uint8_t mm_last_brightness = LIGHT_DEFAULT_BRIGHTNESS;
+static bool mm_brightness_started = false;
+static uint8_t mm_brightness_last = LIGHT_DEFAULT_BRIGHTNESS;
+
+void light_brightness_init(void);
+void light_brightness_start(void);
+void light_brightness_stop(void);
 #endif
 
 void light_driver_set_power(bool power)
@@ -53,13 +58,14 @@ void light_driver_set_power(bool power)
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
     if (power)
     {
-        if (mm_last_brightness < 10)
-            mm_last_brightness = 255;
-        light_driver_set_brightness(mm_last_brightness);
+        if (mm_brightness_last < 10)
+            mm_brightness_last = 255;
+        light_driver_set_brightness(mm_brightness_last);
     }
     else
     {
         light_driver_set_brightness(0);
+		light_brightness_stop();
     }
 #else
     rtc_gpio_hold_dis(MM_LED_GPIO);
@@ -75,7 +81,10 @@ void light_driver_set_power(bool power)
 void light_driver_set_brightness(uint8_t value)
 {
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
-    mm_last_brightness = value;
+	if (value > 0 && !mm_brightness_started)
+		light_brightness_start();
+	
+    mm_brightness_last = value;
 
 #if CONFIG_HALLOWEEN_LED_LEVEL_HIGH
     uint32_t duty_cycle = (1023 * value) / 255; // LEDC resolution set to 10bits, thus: 100% = 1023
@@ -84,12 +93,35 @@ void light_driver_set_brightness(uint8_t value)
 #endif
     ledc_set_duty(LEDC_LOW_SPEED_MODE, MM_LED_LEDC_CH, duty_cycle);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, MM_LED_LEDC_CH);
+	
+	if (value == 0 && mm_brightness_started)
+		light_brightness_stop();
+	
 #endif //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
 }
 
 void light_driver_init(bool power)
 {
+#if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE 
+	light_brightness_init();
+    light_driver_set_brightness(mm_brightness_last);
+	light_driver_set_power(power);
+    
+#else
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+    esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_ON);
+	
+    rtc_gpio_init(MM_LED_GPIO);
+    rtc_gpio_set_direction(MM_LED_GPIO, RTC_GPIO_MODE_OUTPUT_ONLY);
+    rtc_gpio_pulldown_dis(MM_LED_GPIO);
+    rtc_gpio_pullup_dis(MM_LED_GPIO);
+#endif
+	light_driver_set_power(power);
+}
+
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
+void light_brightness_init(void)
+{	
     // Setup LEDC peripheral for PWM backlight control
     const ledc_channel_config_t LCD_backlight_channel = {
         .gpio_num = MM_LED_GPIO,
@@ -111,18 +143,22 @@ void light_driver_init(bool power)
 
     ledc_timer_config(&LCD_backlight_timer);
     ledc_channel_config(&LCD_backlight_channel);
-    
-    light_driver_set_brightness(LIGHT_DEFAULT_BRIGHTNESS);
-	light_driver_set_power(power);
-    
-#else
-    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
-    esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_ON);
-	
-    rtc_gpio_init(MM_LED_GPIO);
-    rtc_gpio_set_direction(MM_LED_GPIO, RTC_GPIO_MODE_OUTPUT_ONLY);
-    rtc_gpio_pulldown_dis(MM_LED_GPIO);
-    rtc_gpio_pullup_dis(MM_LED_GPIO);
-#endif
-	light_driver_set_power(power);
+	   
+	mm_brightness_started = true;
 }
+
+void light_brightness_start(void)
+{
+    ledc_timer_resume(LEDC_LOW_SPEED_MODE, 1);
+	
+	mm_brightness_started = true;
+}
+
+void light_brightness_stop(void)
+{
+	ledc_stop(LEDC_LOW_SPEED_MODE, MM_LED_LEDC_CH, 0);
+	ledc_timer_pause(LEDC_LOW_SPEED_MODE, 1);
+	
+	mm_brightness_started = false;
+}
+#endif
