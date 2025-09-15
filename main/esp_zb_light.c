@@ -21,6 +21,7 @@
 #include "esp_pm.h"
 #include "esp_private/esp_clk.h"
 #include "esp_sleep.h"
+#include <hal/ieee802154_ll.h>
 
 #if !defined ZB_ED_ROLE
 #error Define ZB_ED_ROLE in idf.py menuconfig to compile light (End Device) source code.
@@ -169,9 +170,14 @@ static void esp_zb_task(void *pvParameters)
     /* Enable zigbee light sleep */
     esp_zb_sleep_enable(true);
     esp_zb_init(&zb_nwk_cfg);
+    /* Maximum TX power */
+    esp_zb_set_tx_power(IEEE802154_TXPOWER_VALUE_MAX);
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
 	/* set the dimmable light device config */
     esp_zb_color_dimmable_light_cfg_t light_cfg = ESP_ZB_DEFAULT_COLOR_DIMMABLE_LIGHT_CONFIG();
+#if CONFIG_HALLOWEEN_BATTERY_DEVICE
+    light_cfg.basic_cfg.power_source = 0x03; //Battery
+#endif
 	light_cfg.on_off_cfg.on_off = LIGHT_DEFAULT_ON;
 	light_cfg.level_cfg.current_level = LIGHT_DEFAULT_BRIGHTNESS;
     esp_zb_ep_list_t *esp_zb_on_off_light_ep = esp_zb_color_dimmable_light_ep_create(HA_ESP_LIGHT_ENDPOINT, &light_cfg);

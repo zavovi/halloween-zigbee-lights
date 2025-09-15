@@ -44,6 +44,7 @@
 #define MM_LED_GPIO	4
 #define MM_LED_LEDC_CH 1
 
+static bool mm_light_initialized = false;
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
 static bool mm_brightness_started = false;
 static uint8_t mm_brightness_last = LIGHT_DEFAULT_BRIGHTNESS;
@@ -102,10 +103,11 @@ void light_driver_set_brightness(uint8_t value)
 
 void light_driver_init(bool power)
 {
+    if(mm_light_initialized)
+        return;
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE 
 	light_brightness_init();
     light_driver_set_brightness(mm_brightness_last);
-	light_driver_set_power(power);
     
 #else
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
@@ -116,6 +118,7 @@ void light_driver_init(bool power)
     rtc_gpio_pulldown_dis(MM_LED_GPIO);
     rtc_gpio_pullup_dis(MM_LED_GPIO);
 #endif
+    mm_light_initialized = true;
 	light_driver_set_power(power);
 }
 
