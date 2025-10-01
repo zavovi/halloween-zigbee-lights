@@ -29,6 +29,15 @@
 
 static const char *TAG = "Halloween";
 
+
+#define LIGHT_ENDPOINTS 4
+const uint8_t light_endpoints[LIGHT_ENDPOINTS] = {
+    HA_ESP_LIGHT_ENDPOINT_1,
+    HA_ESP_LIGHT_ENDPOINT_2,
+    HA_ESP_LIGHT_ENDPOINT_3,
+    HA_ESP_LIGHT_ENDPOINT_4
+};
+
 /********************* Define functions **************************/
 
 static esp_err_t deferred_driver_init(void)
@@ -83,11 +92,13 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
             esp_zb_scheduler_alarm((esp_zb_callback_t)bdb_start_top_level_commissioning_cb, ESP_ZB_BDB_MODE_NETWORK_STEERING, 1000);
         }
         break;
+#if CONFIG_HALLOWEEN_ENABLE_SLEEP
     case ESP_ZB_COMMON_SIGNAL_CAN_SLEEP:
         //ESP_LOGI(TAG, "Zigbee can sleep");
 		//esp_zb_sleep_set_threshold(1000);
         esp_zb_sleep_now();
         break;
+#endif
     default:
         ESP_LOGI(TAG, "ZDO signal: %s (0x%x), status: %s", esp_zb_zdo_signal_to_string(sig_type), sig_type,
                  esp_err_to_name(err_status));
@@ -105,7 +116,9 @@ static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t 
                         message->info.status);
 
     ESP_LOGI(TAG, "Received message: endpoint(%d), cluster(0x%x), attribute(0x%x), data size(%d)", message->info.dst_endpoint, message->info.cluster, message->attribute.id, message->attribute.data.size);
-    if (message->info.dst_endpoint == HA_ESP_LIGHT_ENDPOINT) 
+    
+#if CONFIG_HALLOWEEN_BOARD_BEETLE_ESP32C6
+	if (message->info.dst_endpoint == HA_ESP_LIGHT_ENDPOINT_1) 
     {
         if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_ON_OFF) 
         {
@@ -129,6 +142,21 @@ static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t 
         }
 #endif
     }
+#elif CONFIG_HALLOWEEN_BOARD_OLIMEX_C6_EVB
+	if (message->info.dst_endpoint >= HA_ESP_LIGHT_ENDPOINT_1 && message->info.dst_endpoint <= HA_ESP_LIGHT_ENDPOINT_4) 
+    {
+			uint8_t num = message->info.dst_endpoint - 10;
+        if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_ON_OFF) 
+        {
+            if (message->attribute.id == ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID && message->attribute.data.type == ESP_ZB_ZCL_ATTR_TYPE_BOOL) 
+            {
+                light_state = message->attribute.data.value ? *(bool *)message->attribute.data.value : light_state;
+                ESP_LOGI(TAG, "Light #%d sets to %s", num, light_state ? "On" : "Off");
+                relay_driver_set_power(num, light_state);
+            }
+		}
+	}
+#endif
     return ret;
 }
 
@@ -146,6 +174,7 @@ static esp_err_t zb_action_handler(esp_zb_core_action_callback_id_t callback_id,
     return ret;
 }
 
+#if CONFIG_HALLOWEEN_ENABLE_SLEEP
 static esp_err_t esp_zb_power_save_init(void)
 {
     esp_err_t rc = ESP_OK;
@@ -162,13 +191,17 @@ static esp_err_t esp_zb_power_save_init(void)
 #endif
     return rc;
 }
+#endif
 
+#if CONFIG_HALLOWEEN_BOARD_BEETLE_ESP32C6
 static void esp_zb_task(void *pvParameters)
 {
     /* initialize Zigbee stack with Zigbee end-device config */
     esp_zb_cfg_t zb_nwk_cfg = ESP_ZB_ZED_CONFIG();
+#if CONFIG_HALLOWEEN_ENABLE_SLEEP
     /* Enable zigbee light sleep */
     esp_zb_sleep_enable(true);
+#endif
     esp_zb_init(&zb_nwk_cfg);
     /* Maximum TX power */
     esp_zb_set_tx_power(IEEE802154_TXPOWER_VALUE_MAX);
@@ -180,38 +213,90 @@ static void esp_zb_task(void *pvParameters)
 #endif
 	light_cfg.on_off_cfg.on_off = LIGHT_DEFAULT_ON;
 	light_cfg.level_cfg.current_level = LIGHT_DEFAULT_BRIGHTNESS;
-    esp_zb_ep_list_t *esp_zb_on_off_light_ep = esp_zb_color_dimmable_light_ep_create(HA_ESP_LIGHT_ENDPOINT, &light_cfg);
+    esp_zb_ep_list_t *esp_zb_on_off_light_ep = esp_zb_color_dimmable_light_ep_create(HA_ESP_LIGHT_ENDPOINT_1, &light_cfg);
 #else
 	/* set the on-off light device config */
     esp_zb_on_off_light_cfg_t light_cfg = ESP_ZB_DEFAULT_ON_OFF_LIGHT_CONFIG();
+#if CONFIG_HALLOWEEN_BATTERY_DEVICE
+    light_cfg.basic_cfg.power_source = 0x03; //Battery
+#endif
 	light_cfg.on_off_cfg.on_off = LIGHT_DEFAULT_ON;
-    esp_zb_ep_list_t *esp_zb_on_off_light_ep = esp_zb_on_off_light_ep_create(HA_ESP_LIGHT_ENDPOINT, &light_cfg);
+    esp_zb_ep_list_t *esp_zb_on_off_light_ep = esp_zb_on_off_light_ep_create(HA_ESP_LIGHT_ENDPOINT_1, &light_cfg);
 #endif
     zcl_basic_manufacturer_info_t info = {
         .manufacturer_name = ESP_MANUFACTURER_NAME,
         .model_identifier = ESP_MODEL_IDENTIFIER,
     };
 
-    esp_zcl_utility_add_ep_basic_manufacturer_info(esp_zb_on_off_light_ep, HA_ESP_LIGHT_ENDPOINT, &info);
+    esp_zcl_utility_add_ep_basic_manufacturer_info(esp_zb_on_off_light_ep, HA_ESP_LIGHT_ENDPOINT_1, &info);
     esp_zb_device_register(esp_zb_on_off_light_ep);
     esp_zb_core_action_handler_register(zb_action_handler);
     esp_zb_set_primary_network_channel_set(ESP_ZB_PRIMARY_CHANNEL_MASK);
     ESP_ERROR_CHECK(esp_zb_start(false));
     esp_zb_stack_main_loop();
 }
+#elif CONFIG_HALLOWEEN_BOARD_OLIMEX_C6_EVB
+static void esp_zb_task(void *pvParameters)
+{
+    /* initialize Zigbee stack with Zigbee end-device config */
+    esp_zb_cfg_t zb_nwk_cfg = ESP_ZB_ZED_CONFIG();
+#if CONFIG_HALLOWEEN_ENABLE_SLEEP
+    /* Enable zigbee light sleep */
+    esp_zb_sleep_enable(true);
+#endif
+    esp_zb_init(&zb_nwk_cfg);
+    /* Maximum TX power */
+    esp_zb_set_tx_power(IEEE802154_TXPOWER_VALUE_MAX);
+
+    zcl_basic_manufacturer_info_t info = {
+        .manufacturer_name = ESP_MANUFACTURER_NAME,
+        .model_identifier = ESP_MODEL_IDENTIFIER,
+    };
+	
+	esp_zb_ep_list_t *ep_list = esp_zb_ep_list_create();
+	
+	for (int i = 0; i < LIGHT_ENDPOINTS; i++) 
+	{
+		esp_zb_on_off_light_cfg_t light_cfg = ESP_ZB_DEFAULT_ON_OFF_LIGHT_CONFIG();
+		light_cfg.on_off_cfg.on_off = LIGHT_DEFAULT_OFF;
+		
+	
+		esp_zb_endpoint_config_t endpoint_config = {
+			.endpoint = light_endpoints[i],
+			.app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
+			.app_device_id = ESP_ZB_HA_ON_OFF_LIGHT_DEVICE_ID,
+			.app_device_version = 0,
+		};
+		ESP_ERROR_CHECK(esp_zb_ep_list_add_ep(ep_list, esp_zb_on_off_light_clusters_create(&light_cfg), endpoint_config));
+		ESP_ERROR_CHECK(esp_zcl_utility_add_ep_basic_manufacturer_info(ep_list, endpoint_config.endpoint, &info));
+	}
+	ESP_ERROR_CHECK(esp_zb_device_register(ep_list));
+	
+    esp_zb_core_action_handler_register(zb_action_handler);
+    esp_zb_set_primary_network_channel_set(ESP_ZB_PRIMARY_CHANNEL_MASK);
+    ESP_ERROR_CHECK(esp_zb_start(false));
+    esp_zb_stack_main_loop();
+}
+#endif
 
 void app_main(void)
 {
+#if CONFIG_HALLOWEEN_BOARD_BEETLE_ESP32C6
 	light_driver_init(LIGHT_DEFAULT_ON);
+#elif CONFIG_HALLOWEEN_BOARD_OLIMEX_C6_EVB
+	relay_driver_init();
+#endif
     esp_zb_platform_config_t config = {
         .radio_config = ESP_ZB_DEFAULT_RADIO_CONFIG(),
         .host_config = ESP_ZB_DEFAULT_HOST_CONFIG(),
     };
     ESP_ERROR_CHECK(nvs_flash_init());
+#if CONFIG_HALLOWEEN_ENABLE_SLEEP
     /* esp zigbee light sleep initialization*/
     ESP_ERROR_CHECK(esp_zb_power_save_init());
+#endif
     /* load Zigbee platform config to initialization */
     ESP_ERROR_CHECK(esp_zb_platform_config(&config));
 	
-    xTaskCreate(esp_zb_task, "Zigbee_main", 4096, NULL, 5, NULL);
+    xTaskCreate(esp_zb_task, "Zigbee_main", 8192, NULL, 5, NULL);
 }

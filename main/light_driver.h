@@ -66,11 +66,24 @@ void light_driver_set_power(bool power);
 void light_driver_set_brightness(uint8_t value);
 
 /**
-* @brief color light driver init, be invoked where you want to use color light
+* @brief light driver init
 *
 * @param power power on/off
 */
 void light_driver_init(bool power);
+
+/**
+* @brief Set relay state
+*
+* @param  number  Number of relay
+* @param  enabled State of relay
+*/
+void relay_driver_set_power(uint8_t number, bool enabled);
+
+/**
+* @brief Relay driver init
+*/
+void relay_driver_init(void);
 
 #ifdef __cplusplus
 } // extern "C"

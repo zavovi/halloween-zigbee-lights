@@ -1,14 +1,36 @@
 menu "Halloween Configuration"
+
+    choice HALLOWEEN_BOARD
+        prompt "Select Board"
+        default EXAMPLE_LCD_TOUCH_CONTROLLER_STMPE610
+        help
+            Select Board
+
+        config HALLOWEEN_BOARD_BEETLE_ESP32C6
+            bool "DFRobot Beetle ESP32-C6"
+
+        config HALLOWEEN_BOARD_OLIMEX_C6_EVB
+            bool "OLIMEX ESP32-C6-EVB"
+			
+    endchoice
+				
     config HALLOWEEN_BRIGHTNESS_ENABLE
         bool "Enable Brightness"
+        depends on HALLOWEEN_BOARD_BEETLE_ESP32C6
         default y
 		
     config HALLOWEEN_LED_LEVEL_HIGH
         bool "LED Level High"
+        depends on HALLOWEEN_BOARD_BEETLE_ESP32C6
         default y
 		
     config HALLOWEEN_BATTERY_DEVICE
         bool "Device is battery powered"
+        depends on HALLOWEEN_BOARD_BEETLE_ESP32C6
+        default y
+		
+    config HALLOWEEN_ENABLE_SLEEP
+        bool "Enable sleep"
         default y
     
 endmenu

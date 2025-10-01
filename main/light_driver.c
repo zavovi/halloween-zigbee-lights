@@ -36,13 +36,19 @@
  */
 
 #include "esp_log.h"
+#include "driver/gpio.h"
 #include "light_driver.h"
 #include <driver/rtc_io.h>
 #include "esp_sleep.h"
 #include "driver/ledc.h"
 
-#define MM_LED_GPIO	4
-#define MM_LED_LEDC_CH 1
+#define MM_LED_GPIO		GPIO_NUM_4
+#define MM_LED_LEDC_CH 	1
+
+#define MM_RELAY_GPIO_1	GPIO_NUM_10
+#define MM_RELAY_GPIO_2	GPIO_NUM_11
+#define MM_RELAY_GPIO_3	GPIO_NUM_22
+#define MM_RELAY_GPIO_4	GPIO_NUM_23
 
 static bool mm_light_initialized = false;
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
@@ -108,7 +114,6 @@ void light_driver_init(bool power)
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE 
 	light_brightness_init();
     light_driver_set_brightness(mm_brightness_last);
-    
 #else
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
     esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_ON);
@@ -117,9 +122,40 @@ void light_driver_init(bool power)
     rtc_gpio_set_direction(MM_LED_GPIO, RTC_GPIO_MODE_OUTPUT_ONLY);
     rtc_gpio_pulldown_dis(MM_LED_GPIO);
     rtc_gpio_pullup_dis(MM_LED_GPIO);
-#endif
+#endif //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
     mm_light_initialized = true;
 	light_driver_set_power(power);
+}
+
+void relay_driver_init(void)
+{
+	const gpio_config_t io_config = {
+		.pin_bit_mask = BIT64(MM_RELAY_GPIO_1) | BIT64(MM_RELAY_GPIO_2) | BIT64(MM_RELAY_GPIO_3) | BIT64(MM_RELAY_GPIO_4),
+		.mode = GPIO_MODE_OUTPUT,
+		.pull_up_en = GPIO_PULLUP_DISABLE,
+		.pull_down_en = GPIO_PULLDOWN_DISABLE,
+		.intr_type = GPIO_INTR_DISABLE
+	};
+	ESP_ERROR_CHECK(gpio_config(&io_config));
+}
+
+void relay_driver_set_power(uint8_t number, bool enabled)
+{
+	switch(number)
+	{
+	case 1:
+		gpio_set_level(MM_RELAY_GPIO_1, enabled);
+		break;
+	case 2:
+		gpio_set_level(MM_RELAY_GPIO_2, enabled);
+		break;
+	case 3:
+		gpio_set_level(MM_RELAY_GPIO_3, enabled);
+		break;
+	case 4:
+		gpio_set_level(MM_RELAY_GPIO_4, enabled);
+		break;
+	}
 }
 
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
