@@ -1,38 +1,6 @@
 /*
- * SPDX-FileCopyrightText: 2021-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2025 MounMovies
  *
- * SPDX-License-Identifier: LicenseRef-Included
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form, except as embedded into a Espressif Systems
- *    integrated circuit in a product or a software update for such product,
- *    must reproduce the above copyright notice, this list of conditions and
- *    the following disclaimer in the documentation and/or other materials
- *    provided with the distribution.
- *
- * 3. Neither the name of the copyright holder nor the names of its contributors
- *    may be used to endorse or promote products derived from this software without
- *    specific prior written permission.
- *
- * 4. Any software provided in binary form under this license must not be reverse
- *    engineered, decompiled, modified and/or disassembled.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include "esp_log.h"
@@ -40,10 +8,15 @@
 #include <driver/rtc_io.h>
 #include "esp_sleep.h"
 #include "driver/ledc.h"
+#if CONFIG_HALLOWEEN_LIGHT_EFFECTS
+#include "led_indicator.h"
+#include "led_indicator_gpio.h"
+#endif
 
 #define MM_LED_GPIO	4
 #define MM_LED_LEDC_CH 1
 
+static const char *TAG = "LED";
 static bool mm_light_initialized = false;
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
 static bool mm_brightness_started = false;
@@ -52,10 +25,60 @@ static uint8_t mm_brightness_last = LIGHT_DEFAULT_BRIGHTNESS;
 void light_brightness_init(void);
 void light_brightness_start(void);
 void light_brightness_stop(void);
+#endif //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
+
+
+#if CONFIG_HALLOWEEN_LIGHT_EFFECTS
+static const blink_step_t bsp_led_on[] = {
+#if CONFIG_HALLOWEEN_LED_LEVEL_HIGH
+    {LED_BLINK_HOLD, LED_STATE_ON, 0},
+#else
+    {LED_BLINK_HOLD, LED_STATE_OFF, 0},
 #endif
+    {LED_BLINK_STOP, 0, 0},
+};
+static const blink_step_t bsp_led_off[] = {
+#if CONFIG_HALLOWEEN_LED_LEVEL_HIGH
+    {LED_BLINK_HOLD, LED_STATE_OFF, 0},
+#else
+    {LED_BLINK_HOLD, LED_STATE_ON, 0},
+#endif
+    {LED_BLINK_STOP, 0, 0},
+};
+static const blink_step_t bsp_led_blink[] = {
+#if CONFIG_HALLOWEEN_LED_LEVEL_HIGH
+    {LED_BLINK_HOLD, LED_STATE_ON, 1100},
+    {LED_BLINK_HOLD, LED_STATE_OFF, 800},
+#else
+    {LED_BLINK_HOLD, LED_STATE_OFF, 1100},
+    {LED_BLINK_HOLD, LED_STATE_ON, 800},
+#endif
+    {LED_BLINK_LOOP, 0, 0},
+};
+enum {
+    BSP_LED_ON,
+    BSP_LED_OFF,
+    BSP_LED_BLINK,
+    BSP_LED_MAX,
+};
+blink_step_t const *bsp_led_blink_defaults_lists[] = {
+    [BSP_LED_ON] = bsp_led_on,
+    [BSP_LED_OFF] = bsp_led_off,
+    [BSP_LED_BLINK] = bsp_led_blink,
+    [BSP_LED_MAX] = NULL,
+};
+static led_indicator_handle_t mm_led_handle = NULL;
+#endif //CONFIG_HALLOWEEN_LIGHT_EFFECTS
 
 void light_driver_set_power(bool power)
 {
+#if CONFIG_HALLOWEEN_LIGHT_EFFECTS
+	if (power)
+		led_indicator_start(mm_led_handle, BSP_LED_BLINK);
+	else
+		led_indicator_start(mm_led_handle, BSP_LED_OFF);
+#else //CONFIG_HALLOWEEN_LIGHT_EFFECTS
+
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
     if (power)
     {
@@ -68,7 +91,7 @@ void light_driver_set_power(bool power)
         light_driver_set_brightness(0);
 		light_brightness_stop();
     }
-#else
+#else //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
     rtc_gpio_hold_dis(MM_LED_GPIO);
 #if CONFIG_HALLOWEEN_LED_LEVEL_HIGH
 	rtc_gpio_set_level(MM_LED_GPIO, power);
@@ -77,6 +100,9 @@ void light_driver_set_power(bool power)
 #endif
     rtc_gpio_hold_en(MM_LED_GPIO);
 #endif //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
+
+#endif //CONFIG_HALLOWEEN_LIGHT_EFFECTS
+
 }
 
 void light_driver_set_brightness(uint8_t value)
@@ -105,11 +131,25 @@ void light_driver_init(bool power)
 {
     if(mm_light_initialized)
         return;
+	
+#if CONFIG_HALLOWEEN_LIGHT_EFFECTS
+	const led_indicator_gpio_config_t mm_led_gpio_config = {
+		.is_active_level_high = CONFIG_HALLOWEEN_LED_LEVEL_HIGH,
+		.gpio_num = MM_LED_GPIO,
+	};
+	const led_indicator_config_t mm_led_config = {
+		.blink_lists = bsp_led_blink_defaults_lists,
+		.blink_list_num = BSP_LED_MAX,
+	};
+	led_indicator_new_gpio_device(&mm_led_config, &mm_led_gpio_config, &mm_led_handle);
+	ESP_LOGI(TAG, "Initialized LED with effects.");
+#else //CONFIG_HALLOWEEN_LIGHT_EFFECTS
+	
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE 
 	light_brightness_init();
     light_driver_set_brightness(mm_brightness_last);
-    
-#else
+	ESP_LOGI(TAG, "Initialized LED with brightness.");
+#else //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
     esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_ON);
 	
@@ -117,7 +157,11 @@ void light_driver_init(bool power)
     rtc_gpio_set_direction(MM_LED_GPIO, RTC_GPIO_MODE_OUTPUT_ONLY);
     rtc_gpio_pulldown_dis(MM_LED_GPIO);
     rtc_gpio_pullup_dis(MM_LED_GPIO);
-#endif
+	ESP_LOGI(TAG, "Initialized LED with power-saving.");
+#endif //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
+
+#endif //CONFIG_HALLOWEEN_LIGHT_EFFECTS
+
     mm_light_initialized = true;
 	light_driver_set_power(power);
 }

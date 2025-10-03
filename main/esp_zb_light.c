@@ -1,15 +1,6 @@
 /*
- * SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2025 MounMovies
  *
- * SPDX-License-Identifier:  LicenseRef-Included
- *
- * Zigbee HA_on_off_light Example
- *
- * This example code is in the Public Domain (or CC0 licensed, at your option.)
- *
- * Unless required by applicable law or agreed to in writing, this
- * software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
- * CONDITIONS OF ANY KIND, either express or implied.
  */
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -83,11 +74,13 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
             esp_zb_scheduler_alarm((esp_zb_callback_t)bdb_start_top_level_commissioning_cb, ESP_ZB_BDB_MODE_NETWORK_STEERING, 1000);
         }
         break;
+#if CONFIG_HALLOWEEN_ENABLE_SLEEP
     case ESP_ZB_COMMON_SIGNAL_CAN_SLEEP:
         //ESP_LOGI(TAG, "Zigbee can sleep");
 		//esp_zb_sleep_set_threshold(1000);
         esp_zb_sleep_now();
         break;
+#endif //CONFIG_HALLOWEEN_ENABLE_SLEEP
     default:
         ESP_LOGI(TAG, "ZDO signal: %s (0x%x), status: %s", esp_zb_zdo_signal_to_string(sig_type), sig_type,
                  esp_err_to_name(err_status));
@@ -146,6 +139,7 @@ static esp_err_t zb_action_handler(esp_zb_core_action_callback_id_t callback_id,
     return ret;
 }
 
+#if CONFIG_HALLOWEEN_ENABLE_SLEEP
 static esp_err_t esp_zb_power_save_init(void)
 {
     esp_err_t rc = ESP_OK;
@@ -162,13 +156,16 @@ static esp_err_t esp_zb_power_save_init(void)
 #endif
     return rc;
 }
+#endif //CONFIG_HALLOWEEN_ENABLE_SLEEP
 
 static void esp_zb_task(void *pvParameters)
 {
     /* initialize Zigbee stack with Zigbee end-device config */
     esp_zb_cfg_t zb_nwk_cfg = ESP_ZB_ZED_CONFIG();
+#if CONFIG_HALLOWEEN_ENABLE_SLEEP
     /* Enable zigbee light sleep */
     esp_zb_sleep_enable(true);
+#endif //CONFIG_HALLOWEEN_ENABLE_SLEEP
     esp_zb_init(&zb_nwk_cfg);
     /* Maximum TX power */
     esp_zb_set_tx_power(IEEE802154_TXPOWER_VALUE_MAX);
@@ -208,8 +205,10 @@ void app_main(void)
         .host_config = ESP_ZB_DEFAULT_HOST_CONFIG(),
     };
     ESP_ERROR_CHECK(nvs_flash_init());
+#if CONFIG_HALLOWEEN_ENABLE_SLEEP
     /* esp zigbee light sleep initialization*/
     ESP_ERROR_CHECK(esp_zb_power_save_init());
+#endif //CONFIG_HALLOWEEN_ENABLE_SLEEP
     /* load Zigbee platform config to initialization */
     ESP_ERROR_CHECK(esp_zb_platform_config(&config));
 	
