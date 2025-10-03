@@ -23,9 +23,6 @@
 #include "esp_sleep.h"
 #include <hal/ieee802154_ll.h>
 
-#if !defined ZB_ED_ROLE
-#error Define ZB_ED_ROLE in idf.py menuconfig to compile light (End Device) source code.
-#endif
 
 static const char *TAG = "Halloween";
 
@@ -86,7 +83,7 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
     case ESP_ZB_COMMON_SIGNAL_CAN_SLEEP:
         //ESP_LOGI(TAG, "Zigbee can sleep");
 		//esp_zb_sleep_set_threshold(1000);
-        esp_zb_sleep_now();
+        //esp_zb_sleep_now();
         break;
     default:
         ESP_LOGI(TAG, "ZDO signal: %s (0x%x), status: %s", esp_zb_zdo_signal_to_string(sig_type), sig_type,
@@ -166,9 +163,9 @@ static esp_err_t esp_zb_power_save_init(void)
 static void esp_zb_task(void *pvParameters)
 {
     /* initialize Zigbee stack with Zigbee end-device config */
-    esp_zb_cfg_t zb_nwk_cfg = ESP_ZB_ZED_CONFIG();
+    esp_zb_cfg_t zb_nwk_cfg = ESP_ZB_ZR_CONFIG();
     /* Enable zigbee light sleep */
-    esp_zb_sleep_enable(true);
+    //esp_zb_sleep_enable(true);
     esp_zb_init(&zb_nwk_cfg);
     /* Maximum TX power */
     esp_zb_set_tx_power(IEEE802154_TXPOWER_VALUE_MAX);

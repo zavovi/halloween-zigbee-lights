@@ -25,6 +25,8 @@
 #define ED_KEEP_ALIVE                   3000                                 /* 3000 millisecond */
 #endif
 #define HA_ESP_LIGHT_ENDPOINT           10                                   /* esp light bulb device endpoint, used to process light controlling commands */
+#define MAX_CHILDREN                    10                                    /* the max amount of connected devices */
+
 #define ESP_ZB_PRIMARY_CHANNEL_MASK     ESP_ZB_TRANSCEIVER_ALL_CHANNELS_MASK /* Zigbee primary channel mask use in the example */
 
 /* Basic manufacturer information */
@@ -39,6 +41,15 @@
             .ed_timeout = ED_AGING_TIMEOUT,                         \
             .keep_alive = ED_KEEP_ALIVE,                            \
         },                                                          \
+    }
+    
+#define ESP_ZB_ZR_CONFIG()                                                              \
+    {                                                                                   \
+        .esp_zb_role = ESP_ZB_DEVICE_TYPE_ROUTER,                                       \
+        .install_code_policy = INSTALLCODE_POLICY_ENABLE,                               \
+        .nwk_cfg.zczr_cfg = {                                                           \
+            .max_children = MAX_CHILDREN,                                               \
+        },                                                                              \
     }
 
 #define ESP_ZB_DEFAULT_RADIO_CONFIG()                           \
