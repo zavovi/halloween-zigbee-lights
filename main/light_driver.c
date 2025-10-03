@@ -31,17 +31,17 @@ void light_brightness_stop(void);
 #if CONFIG_HALLOWEEN_LIGHT_EFFECTS
 static const blink_step_t bsp_led_on[] = {
 #if CONFIG_HALLOWEEN_LED_LEVEL_HIGH
-    {LED_BLINK_HOLD, LED_STATE_ON, 0},
+    {LED_BLINK_HOLD, LED_STATE_ON, 1000},
 #else
-    {LED_BLINK_HOLD, LED_STATE_OFF, 0},
+    {LED_BLINK_HOLD, LED_STATE_OFF, 1000},
 #endif
     {LED_BLINK_STOP, 0, 0},
 };
 static const blink_step_t bsp_led_off[] = {
 #if CONFIG_HALLOWEEN_LED_LEVEL_HIGH
-    {LED_BLINK_HOLD, LED_STATE_OFF, 0},
+    {LED_BLINK_HOLD, LED_STATE_OFF, 1000},
 #else
-    {LED_BLINK_HOLD, LED_STATE_ON, 0},
+    {LED_BLINK_HOLD, LED_STATE_ON, 1000},
 #endif
     {LED_BLINK_STOP, 0, 0},
 };
@@ -74,9 +74,15 @@ void light_driver_set_power(bool power)
 {
 #if CONFIG_HALLOWEEN_LIGHT_EFFECTS
 	if (power)
+	{
+		led_indicator_stop(mm_led_handle, BSP_LED_OFF);
 		led_indicator_start(mm_led_handle, BSP_LED_BLINK);
+	}
 	else
+	{
+		led_indicator_stop(mm_led_handle, BSP_LED_BLINK);
 		led_indicator_start(mm_led_handle, BSP_LED_OFF);
+	}
 #else //CONFIG_HALLOWEEN_LIGHT_EFFECTS
 
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
