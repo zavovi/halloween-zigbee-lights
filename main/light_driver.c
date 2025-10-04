@@ -8,13 +8,15 @@
 #include <driver/rtc_io.h>
 #include "esp_sleep.h"
 #include "driver/ledc.h"
-#if CONFIG_HALLOWEEN_LIGHT_EFFECTS
-#include "led_indicator.h"
-#include "led_indicator_gpio.h"
+#if CONFIG_HALLOWEEN_BLINK_ENABLE
+#include "esp_timer.h"
 #endif
 
-#define MM_LED_GPIO	4
-#define MM_LED_LEDC_CH 1
+#define MM_LED_GPIO		4
+#define MM_LED_LEDC_CH 	1
+
+#define BLINK_TIME_ON_MS   1100
+#define BLINK_TIME_OFF_MS  800
 
 static const char *TAG = "LED";
 static bool mm_light_initialized = false;
@@ -27,87 +29,25 @@ void light_brightness_start(void);
 void light_brightness_stop(void);
 #endif //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
 
+#if CONFIG_HALLOWEEN_BLINK_ENABLE
+void light_effect_init(void);
+void start_effect(void);
+void stop_effect(void);
+#endif //HALLOWEEN_BLINK_ENABLE
 
-#if CONFIG_HALLOWEEN_LIGHT_EFFECTS
-static const blink_step_t bsp_led_on[] = {
-#if CONFIG_HALLOWEEN_LED_LEVEL_HIGH
-    {LED_BLINK_HOLD, LED_STATE_ON, 1000},
-#else
-    {LED_BLINK_HOLD, LED_STATE_OFF, 1000},
-#endif
-    {LED_BLINK_STOP, 0, 0},
-};
-static const blink_step_t bsp_led_off[] = {
-#if CONFIG_HALLOWEEN_LED_LEVEL_HIGH
-    {LED_BLINK_HOLD, LED_STATE_OFF, 1000},
-#else
-    {LED_BLINK_HOLD, LED_STATE_ON, 1000},
-#endif
-    {LED_BLINK_STOP, 0, 0},
-};
-static const blink_step_t bsp_led_blink[] = {
-#if CONFIG_HALLOWEEN_LED_LEVEL_HIGH
-    {LED_BLINK_HOLD, LED_STATE_ON, 1100},
-    {LED_BLINK_HOLD, LED_STATE_OFF, 800},
-#else
-    {LED_BLINK_HOLD, LED_STATE_OFF, 1100},
-    {LED_BLINK_HOLD, LED_STATE_ON, 800},
-#endif
-    {LED_BLINK_LOOP, 0, 0},
-};
-enum {
-    BSP_LED_ON,
-    BSP_LED_OFF,
-    BSP_LED_BLINK,
-    BSP_LED_MAX,
-};
-blink_step_t const *bsp_led_blink_defaults_lists[] = {
-    [BSP_LED_ON] = bsp_led_on,
-    [BSP_LED_OFF] = bsp_led_off,
-    [BSP_LED_BLINK] = bsp_led_blink,
-    [BSP_LED_MAX] = NULL,
-};
-static led_indicator_handle_t mm_led_handle = NULL;
-#endif //CONFIG_HALLOWEEN_LIGHT_EFFECTS
+void led_rtc_init(void);
+static void led_set_power(bool power);
 
 void light_driver_set_power(bool power)
 {
-#if CONFIG_HALLOWEEN_LIGHT_EFFECTS
+#if CONFIG_HALLOWEEN_BLINK_ENABLE
 	if (power)
-	{
-		led_indicator_stop(mm_led_handle, BSP_LED_OFF);
-		led_indicator_start(mm_led_handle, BSP_LED_BLINK);
-	}
+		start_effect();
 	else
-	{
-		led_indicator_stop(mm_led_handle, BSP_LED_BLINK);
-		led_indicator_start(mm_led_handle, BSP_LED_OFF);
-	}
-#else //CONFIG_HALLOWEEN_LIGHT_EFFECTS
-
-#if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
-    if (power)
-    {
-        if (mm_brightness_last < 10)
-            mm_brightness_last = 255;
-        light_driver_set_brightness(mm_brightness_last);
-    }
-    else
-    {
-        light_driver_set_brightness(0);
-		light_brightness_stop();
-    }
-#else //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
-    rtc_gpio_hold_dis(MM_LED_GPIO);
-#if CONFIG_HALLOWEEN_LED_LEVEL_HIGH
-	rtc_gpio_set_level(MM_LED_GPIO, power);
-#else
-	rtc_gpio_set_level(MM_LED_GPIO, !power);
-#endif
-    rtc_gpio_hold_en(MM_LED_GPIO);
-#endif //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
-
-#endif //CONFIG_HALLOWEEN_LIGHT_EFFECTS
+		stop_effect();
+#else //CONFIG_HALLOWEEN_BLINK_ENABLE
+    led_set_power(power);
+#endif //CONFIG_HALLOWEEN_BLINK_ENABLE
 
 }
 
@@ -138,24 +78,26 @@ void light_driver_init(bool power)
     if(mm_light_initialized)
         return;
 	
-#if CONFIG_HALLOWEEN_LIGHT_EFFECTS
-	const led_indicator_gpio_config_t mm_led_gpio_config = {
-		.is_active_level_high = CONFIG_HALLOWEEN_LED_LEVEL_HIGH,
-		.gpio_num = MM_LED_GPIO,
-	};
-	const led_indicator_config_t mm_led_config = {
-		.blink_lists = bsp_led_blink_defaults_lists,
-		.blink_list_num = BSP_LED_MAX,
-	};
-	led_indicator_new_gpio_device(&mm_led_config, &mm_led_gpio_config, &mm_led_handle);
-	ESP_LOGI(TAG, "Initialized LED with effects.");
-#else //CONFIG_HALLOWEEN_LIGHT_EFFECTS
-	
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE 
 	light_brightness_init();
     light_driver_set_brightness(mm_brightness_last);
 	ESP_LOGI(TAG, "Initialized LED with brightness.");
 #else //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
+	led_rtc_init();
+	ESP_LOGI(TAG, "Initialized LED with RTC.");
+#endif //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
+	
+#if CONFIG_HALLOWEEN_BLINK_ENABLE
+	light_effect_init();
+	ESP_LOGI(TAG, "Initialized LED blink effect.");
+#endif //HALLOWEEN_BLINK_ENABLE
+
+    mm_light_initialized = true;
+	light_driver_set_power(power);
+}
+
+void led_rtc_init(void)
+{
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
     esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_ON);
 	
@@ -163,14 +105,83 @@ void light_driver_init(bool power)
     rtc_gpio_set_direction(MM_LED_GPIO, RTC_GPIO_MODE_OUTPUT_ONLY);
     rtc_gpio_pulldown_dis(MM_LED_GPIO);
     rtc_gpio_pullup_dis(MM_LED_GPIO);
-	ESP_LOGI(TAG, "Initialized LED with power-saving.");
-#endif //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
-
-#endif //CONFIG_HALLOWEEN_LIGHT_EFFECTS
-
-    mm_light_initialized = true;
-	light_driver_set_power(power);
 }
+
+void led_rtc_power(bool power)
+{
+	rtc_gpio_hold_dis(MM_LED_GPIO);
+#if CONFIG_HALLOWEEN_LED_LEVEL_HIGH
+	rtc_gpio_set_level(MM_LED_GPIO, power);
+#else
+	rtc_gpio_set_level(MM_LED_GPIO, !power);
+#endif
+    rtc_gpio_hold_en(MM_LED_GPIO);
+}
+
+static void led_set_power(bool power)
+{
+#if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
+    if (power)
+    {
+        light_driver_set_brightness(mm_brightness_last);
+    }
+    else
+    {
+		light_brightness_stop();
+    }
+#else //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
+    led_rtc_power(power);
+#endif //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
+}
+
+#if CONFIG_HALLOWEEN_BLINK_ENABLE
+static esp_timer_handle_t blink_timer;
+static bool blink_state = false;
+static bool blink_en = false;
+
+static void effect_timer_callback(void* arg) {
+    if (!blink_en) return;
+
+    blink_state = !blink_state;
+
+    if (blink_state) {
+		led_set_power(1);
+        // Set timer to ON_TIME
+        esp_timer_stop(blink_timer);
+        esp_timer_start_once(blink_timer, BLINK_TIME_ON_MS * 1000ULL);
+    } else {
+		led_set_power(0);
+        // Set timer to OFF_TIME
+        esp_timer_stop(blink_timer);
+        esp_timer_start_once(blink_timer, BLINK_TIME_OFF_MS * 1000ULL);
+    }
+}
+
+void light_effect_init(void)
+{			
+	/* timer for efekt */
+    const esp_timer_create_args_t timer_args = {
+        .callback = &effect_timer_callback,
+        .name = "blink_timer"
+    };
+    esp_timer_create(&timer_args, &blink_timer);
+}
+
+void start_effect(void) 
+{
+    if (blink_en) return;
+    blink_en = true;
+    blink_state = false;
+    esp_timer_start_once(blink_timer, 1000);
+}
+
+void stop_effect(void) 
+{
+    blink_en = false;
+    esp_timer_stop(blink_timer);
+	led_set_power(0);
+}
+#endif
 
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
 void light_brightness_init(void)
@@ -190,7 +201,7 @@ void light_brightness_init(void)
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .duty_resolution = LEDC_TIMER_10_BIT,
         .timer_num = 1,
-        .freq_hz = 1000,
+        .freq_hz = (CONFIG_HALLOWEEN_BRIGHTNESS_FREQ),
         .clk_cfg = LEDC_AUTO_CLK
     };
 

@@ -1,20 +1,23 @@
-menu "Halloween Configuration"
-    config HALLOWEEN_LIGHT_EFFECTS
-        bool "Enable light effect"
-        default n
-		
+menu "Halloween Configuration"		
     config HALLOWEEN_LED_LEVEL_HIGH
         bool "LED Level High"
         default y
 		
     config HALLOWEEN_BRIGHTNESS_ENABLE
         bool "Enable Brightness"
-		depends on !HALLOWEEN_LIGHT_EFFECTS
         default y
+		
+    config HALLOWEEN_BRIGHTNESS_FREQ
+        int "Brightness PWM Frequency"
+		depends on HALLOWEEN_BRIGHTNESS_ENABLE
+        default 1000
+		
+    config HALLOWEEN_BLINK_ENABLE
+        bool "Enable blink effect"
+        default n
 		
     config HALLOWEEN_ENABLE_SLEEP
         bool "Enable sleep"
-		depends on !HALLOWEEN_LIGHT_EFFECTS
         default y
 		
     config HALLOWEEN_BATTERY_DEVICE
