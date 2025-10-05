@@ -16,6 +16,10 @@ menu "Halloween Configuration"
         bool "Enable blink effect"
         default n
 		
+    config HALLOWEEN_AUDIO_ENABLE
+        bool "Enable audio (BZZ) effect"
+        default n
+		
     config HALLOWEEN_ENABLE_SLEEP
         bool "Enable sleep"
         default y

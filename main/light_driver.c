@@ -15,6 +15,9 @@
 #define MM_LED_GPIO		4
 #define MM_LED_LEDC_CH 	1
 
+#define MM_AUDIO_GPIO	 5
+#define MM_AUDIO_LEDC_CH 2
+
 #define BLINK_TIME_ON_MS   1100
 #define BLINK_TIME_OFF_MS  800
 
@@ -34,6 +37,14 @@ void light_effect_init(void);
 void start_effect(void);
 void stop_effect(void);
 #endif //HALLOWEEN_BLINK_ENABLE
+
+#if CONFIG_HALLOWEEN_AUDIO_ENABLE
+void audio_init(void);
+void audio_start(void);
+void audio_stop(void);
+void audio_enable(bool enable);
+static bool mm_audio_started = false;
+#endif //CONFIG_HALLOWEEN_AUDIO_ENABLE
 
 void led_rtc_init(void);
 static void led_set_power(bool power);
@@ -92,6 +103,11 @@ void light_driver_init(bool power)
 	ESP_LOGI(TAG, "Initialized LED blink effect.");
 #endif //HALLOWEEN_BLINK_ENABLE
 
+#if CONFIG_HALLOWEEN_AUDIO_ENABLE
+	audio_init();
+	ESP_LOGI(TAG, "Initialized audio.");
+#endif //CONFIG_HALLOWEEN_AUDIO_ENABLE
+
     mm_light_initialized = true;
 	light_driver_set_power(power);
 }
@@ -132,6 +148,10 @@ static void led_set_power(bool power)
 #else //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
     led_rtc_power(power);
 #endif //CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
+
+#if CONFIG_HALLOWEEN_AUDIO_ENABLE
+	audio_enable(power);
+#endif //CONFIG_HALLOWEEN_AUDIO_ENABLE
 }
 
 #if CONFIG_HALLOWEEN_BLINK_ENABLE
@@ -186,43 +206,95 @@ void stop_effect(void)
 #if CONFIG_HALLOWEEN_BRIGHTNESS_ENABLE
 void light_brightness_init(void)
 {	
-    // Setup LEDC peripheral for PWM backlight control
-    const ledc_channel_config_t LCD_backlight_channel = {
+    const ledc_timer_config_t light_brightness_timer = {
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .duty_resolution = LEDC_TIMER_10_BIT,
+        .timer_num = LEDC_TIMER_1,
+        .freq_hz = (CONFIG_HALLOWEEN_BRIGHTNESS_FREQ),
+        .clk_cfg = LEDC_AUTO_CLK
+    };
+    const ledc_channel_config_t light_brightness_channel = {
         .gpio_num = MM_LED_GPIO,
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .channel = MM_LED_LEDC_CH,
         .intr_type = LEDC_INTR_DISABLE,
-        .timer_sel = 1,
+        .timer_sel = LEDC_TIMER_1,
         .duty = 0,
         .hpoint = 0,
         .sleep_mode = LEDC_SLEEP_MODE_KEEP_ALIVE
     };
-    const ledc_timer_config_t LCD_backlight_timer = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .duty_resolution = LEDC_TIMER_10_BIT,
-        .timer_num = 1,
-        .freq_hz = (CONFIG_HALLOWEEN_BRIGHTNESS_FREQ),
-        .clk_cfg = LEDC_AUTO_CLK
-    };
 
-    ledc_timer_config(&LCD_backlight_timer);
-    ledc_channel_config(&LCD_backlight_channel);
+    ledc_timer_config(&light_brightness_timer);
+    ledc_channel_config(&light_brightness_channel);
 	   
 	mm_brightness_started = true;
 }
 
 void light_brightness_start(void)
 {
-    ledc_timer_resume(LEDC_LOW_SPEED_MODE, 1);
-	
+    ledc_timer_resume(LEDC_LOW_SPEED_MODE, LEDC_TIMER_1);
 	mm_brightness_started = true;
 }
 
 void light_brightness_stop(void)
 {
 	ledc_stop(LEDC_LOW_SPEED_MODE, MM_LED_LEDC_CH, 0);
-	ledc_timer_pause(LEDC_LOW_SPEED_MODE, 1);
-	
+	ledc_timer_pause(LEDC_LOW_SPEED_MODE, LEDC_TIMER_1);	
 	mm_brightness_started = false;
+}
+#endif
+
+#if CONFIG_HALLOWEEN_AUDIO_ENABLE
+void audio_init(void)
+{	
+    const ledc_timer_config_t audio_timer = {
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .duty_resolution = LEDC_TIMER_10_BIT,
+        .timer_num = LEDC_TIMER_2,
+        .freq_hz = 80,
+        .clk_cfg = LEDC_AUTO_CLK
+    };
+    const ledc_channel_config_t audio_channel = {
+        .gpio_num = MM_AUDIO_GPIO,
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .channel = MM_AUDIO_LEDC_CH,
+        .intr_type = LEDC_INTR_DISABLE,
+        .timer_sel = LEDC_TIMER_2,
+        .duty = 2,
+        .hpoint = 0,
+        .sleep_mode = LEDC_SLEEP_MODE_KEEP_ALIVE
+    };
+
+    ESP_ERROR_CHECK(ledc_timer_config(&audio_timer));
+    ESP_ERROR_CHECK(ledc_channel_config(&audio_channel));
+	
+	mm_audio_started = true;
+}
+
+void audio_start(void)
+{	
+	if(mm_audio_started)
+		return;
+
+    ledc_timer_resume(LEDC_LOW_SPEED_MODE, LEDC_TIMER_2);
+	mm_audio_started = true;
+}
+
+void audio_stop(void)
+{
+	ledc_timer_pause(LEDC_LOW_SPEED_MODE, LEDC_TIMER_2);
+	mm_audio_started = false;
+}
+
+void audio_enable(bool enable)
+{
+	if(enable)
+	{
+		audio_start();
+	}
+	else
+	{
+		audio_stop();
+	}
 }
 #endif
